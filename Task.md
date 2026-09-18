@@ -15,7 +15,9 @@ Système de connaissances (notes).
 Dialogues et quêtes des personnages.
 Système de combat et Roi Creux.
 Conditions et textes des 4 fins.
+
 Étape 3 : ensemble
+
 Relier les deux parties.
 Tester chaque fin.
 Corriger les bugs.
