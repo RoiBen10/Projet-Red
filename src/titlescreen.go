@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"syscall"
 	"time"
-	"unsafe"
+
+	"golang.org/x/term"
 )
 
 // templePalette --> 90 couleurs adaptées à la vidéo (saturation x2, quantification median-cut).
@@ -531,24 +531,13 @@ var templeColors = []string{
 	"/.-,,+))'&&'&&''&'''&&&&&&&&&&&&&&'''&&&&&'&&&&&)++,,-....-,,+***++,,,,,+*))(('''''''''''(\n3221.,,+))(('&'&&''''''&&&''&&'&'('''((*,---..............-,,,+*((((((('((((((((''''''((((\n33222111///....--,,,,,,+*((('''''*+++,.//1111111111///////..-,--,+**(''''''''''''''('())))\n3333443322211010110///./..///.*)+,,./1111111222222232222211///..-,+*)(())))(''''''''''''''\n655555566555544333211100//////.--./11234444444444444443322211//..-++,---+**++*+)((''''''''\n8555555655566655554433222211/01/////1222423222222233333211//..-+*))(((((())((((''''''''(((\n88666666668;;;;88644433332212223221122222212322222223221/.,**)))))))))))()((((((((()*++,-.\nB@@@@@?;8888888;;;;;;88886656555421/,,,,--......-.--,--,+**)))***+,-----,,,,-.////////1122\nJJJJJJCB?;;;;;;;????????;;86321.-,++*)(())*++,,-,++*+*))(((())))**++,,-../1122222111112222\nBBCJJJJJJJJJCB@@@@@??;;;;???;88553221/-,,,,-,,----,,+,..--,,,,,,,,,,,,,,,.///0010///..-../\nBCCJJJJJLLLLLLLLLJJJCCB@@??;88665444333333343333433333334543322210///111223332221100000000\nJJJJJJJJJLLLLLLLLLLLLLJJJJCCBBB@@@@@@@@BBBBBBBBB@@??8865422111111234688;;???????????;;;;88\nLLLLLLLLLLLLLLLLLLLLLLLLLLLLJJJJJCCCCCJJJLLLLLLLLJJCCBB@??;865568;??@CCCJJLLLLLLLLLLLLLLLJ\n?;?@BBBB@@?;88665544568;;?@BBCCJJJJCCCJJJJJJJJJJCBB@;;866688;;??@@BCCJLLLLZZZZZZZZZZZZZZLL\n555555666666686686554322223346;?BBCJJJLLJJJJJJJJCB?88886655565555533112368;?@BCCCCCCCJCCB?\n5666666668;;?????;;?@BBCCCCCCCCCBBBB@BCCJJJJJJJCCBBBBBBCCCCCCCCCCCCB@???????;?????;;;;;888\n@@BBBBBCCCCCCCCCCCCCCCCCCBBBBBBBBBBBB@@@@@@@???;;;;;;;;??@@????;;;;;;888866333333333556666\nCCCCCCCCCCCCCCCBBBB@B@@@@@@BBBBBBBBBB@@@<;;8788;;;?@@@@BBCCCCCJJJJJJJCCCCCCCCCCCCCCBBBBBBB\nJJJCCCCBBBBCCCCCCCCCCCCCCJJJLLLLLLNNNNNNNNNNNNNNNNNNNNNNNNNNLLZZZZZZZZZZZZZZZZZZZZZZZZZZZZ\ndddddddbb_____bb_bbbbbbddddddddrrdbbbbdddbddbddddddrrdrrddrrrddrrddrrrrrrddddddddddddrdlld\nZ[\\^a``ag``a``aaag`ggckkcbccncncbbkb`___``cbb`ccndbkdddddddddddddldkcdmddbcdccccbbbbbbbbbk\ngga`YW\\\\]]]^gg^cgggga``````___`]_`bkk``]]Y^YWW`]]W]\\]WWWW]\\\\W^Y`Y]]WWSSSUSSUUW\\`__b__b_bkb\nokllk\\lokkolouo]knhhaggbkcoolkbbbb__bbblk____\\kkbb_bbbbb_``kcb`b_UUU[\\\\__\\\\_\\___\\[ZZZZZZZZ\nsttnttsmmmbb``]bcc\\_b_cccbdbb\\WW__\\\\W\\\\bdruuurr_b_\\___\\\\abbb\\`bcc`^_bb]\\\\\\_bb__\\_\\\\\\[[WUUU\ntttsttsssssttttnmttssssttpnpcdd____c__^_ac^^ca__a_dddddmsmcpp`^YYYghhhgghgghpg`UUSSSSSU\\ba\nuunnndrmmmmmdddddcmmmqttttmmt^Yata\\cssmmssm^amgcmgaUURRUmsssm^f`Yffeefffffffhhggggkloollkh\nUMTQQV^bVYbYY^baXaa`affjeXaptaMQU^W_]`W^`a``````^`Yakuoorrrpvtpaa^]`gggg``gggggggaaggagaaa\n\\[[[\\\\__\\__W]]\\[U[[STUYhfnkbbghhagaaaaaaaaaa^^fafaaVYY``^WYYacc]`ghpaa^^ggpplgphnh`ggngYW^\n[_\\[[[USZZNZ[[ZNNS[\\\\qqqophhjehhhhhhpggggggggnqqpppXYwuocgubclokkbnpagggnkkkklukacnorlb```\nb\\SUSU[ZZNZ[[[[TWWpwopoghhfjjjhghfffghfhqhhhhophopuukanug]W`kkgnmcW`loowokb_kruuuxuwwwwwuw\nQQSSTQSQSMMHGMUW^kotphjjhjjijjhhggafgqqjjqqquwwwuuwywcbkbbbbbbbblddmnlllook\\UUWWWUU\\_UWwww\n`agfhfffg^gXVV`clologfffaafffgwggggggqjjjjjhqpgggggggaUbbddrrruxrlddmmnooluk_WWW\\\\^_bW\\_\\]\nggjjjjjgYhypqmlllrrrurruurruuurxxuuxuoolaaagkklkl`klcaE_k\\_bUWWUW_l\\Tcsmnluupouu]U]gnob_\\S\naY`ghhjhqquuxookrrkkrrbrkkrbrrrrruklrrnrkakkrrrlttpppcM_lU]kQQTQT]lWM^vssmllllluub`pgggnrn\nqqzjjqqqwpouooplru^amssmca^RouuoutamssmmafVVpuukrmssssmcnW]bTTURW`tcWavvvttnloouuuyurkngph\nyyzvsssqmtttpnllptsttvttstt^wwuuxvsssvstsea^xyttsvvvsssssckl]^cmssvvsvstxuooollllnnpuuyyyu\ntssssssttttttptvvvvvvvvvvvvvvvzyvvvvvvvsXeXmzxvvvvvvvvvvvsvvxvvvvvvvvvvvmoolklnmtsssmtvzzx\nssssssssttttttuwwttvvvvvxxwwwywuwtvvvvvvxxwwqutvvvvvvvvvvvvwpppwuvvvvvvtponolntsssssssstmr\n",
 }
 
-// terminalSize --> largeur/hauteur du terminal (ioctl TIOCGWINSZ), 80x24 si indisponible.
-type winsize struct {
-	Row    uint16
-	Col    uint16
-	Xpixel uint16
-	Ypixel uint16
-}
-
+// terminalSize --> largeur/hauteur du terminal (multiplateforme via golang.org/x/term), 80x24 si indisponible.
 func terminalSize() (int, int) {
-	ws := &winsize{}
-	ret, _, _ := syscall.Syscall(syscall.SYS_IOCTL,
-		uintptr(os.Stdout.Fd()),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(ws)))
-	if int(ret) == -1 || ws.Col == 0 || ws.Row == 0 {
+	cols, rows, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || cols == 0 || rows == 0 {
 		return 80, 24
 	}
-	return int(ws.Col), int(ws.Row)
+	return cols, rows
 }
 
 // resampleGrid --> ré-échantillonne une grille de caractères (plus proche voisin) vers targetW x targetH.
