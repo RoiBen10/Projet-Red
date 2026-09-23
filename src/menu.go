@@ -2,10 +2,13 @@ package main
 
 import "fmt"
 
-// Tâche 6 / 7 / 15 : runMenu --> affiche le menu (appelé depuis la carte, Entrée pour l'ouvrir).
+// Tâche 6 / 7 / 15 : runMenu --> affiche le menu (appelé depuis la carte, Entrée ou M pour l'ouvrir).
 // L'horloge (midnight) tourne en continu côté carte ; runMenu la surveille aussi pendant qu'il est
-// ouvert. Renvoie true si la partie doit se terminer (Quitter ou minuit), false pour revenir à la carte.
-func runMenu(c *Character, midnight chan struct{}) bool {
+// ouvert. Renvoie (quit, newDay) : quit=true si la partie doit se terminer (flux fermé) ; newDay=true
+// si une nouvelle boucle temporelle a démarré pendant que le menu était ouvert (mort, minuit), pour
+// que la carte redémarre son horloge. Après un combat (gagné ou perdu), on revient toujours
+// directement à la carte, jamais au menu.
+func runMenu(c *Character, midnight chan struct{}) (quit bool, newDay bool) {
 	for {
 		fmt.Println("\n=== MENU ===")
 		fmt.Println("1. Afficher les informations du personnage")
@@ -20,13 +23,15 @@ func runMenu(c *Character, midnight chan struct{}) bool {
 		select {
 		case choice, ok := <-inputChan:
 			if !ok {
-				return true
+				return true, false
 			}
 			switch choice {
 			case "1":
 				c.displayInfo()
 			case "2":
-				inventoryMenu(c)
+				if inventoryMenu(c) {
+					return false, true
+				}
 			case "3":
 				merchantMenu(c)
 			case "4":
@@ -34,25 +39,29 @@ func runMenu(c *Character, midnight chan struct{}) bool {
 			case "5":
 				goblin := initGoblin()
 				disableLineMode()
-				trainingFight(c, &goblin)
+				won := trainingFight(c, &goblin)
 				enableLineMode()
+				return false, !won
 			case "6":
-				return false
+				return false, false
 			case "7":
 				fmt.Println("À demain, Voyageur...")
-				return true
+				return true, false
 			default:
 				fmt.Println("Choix invalide.")
 			}
 		case <-midnight:
 			fmt.Println("Le feu s'abat sur Emberhollow. " + c.Name + " meurt...")
-			return true
+			c.startNewDay()
+			return false, true
 		}
 	}
 }
 
-// Tâche 6 / 5 / 9 / 10 : inventoryMenu --> affiche l'inventaire.
-func inventoryMenu(c *Character) {
+// Tâche 6 / 5 / 9 / 10 : inventoryMenu --> affiche l'inventaire. Renvoie true si une potion de
+// poison a tué le Voyageur (nouvelle boucle déclenchée), pour que runMenu referme tout et revienne
+// directement à la carte.
+func inventoryMenu(c *Character) bool {
 	for {
 		c.accessInventory()
 		fmt.Println("1. Utiliser une potion de vie")
@@ -68,7 +77,9 @@ func inventoryMenu(c *Character) {
 		case "1":
 			c.takePot()
 		case "2":
-			c.poisonPot()
+			if c.poisonPot() {
+				return true
+			}
 		case "3":
 			c.useSpellBook()
 		case "4":
@@ -78,7 +89,7 @@ func inventoryMenu(c *Character) {
 		case "6":
 			c.equipItem("Bottes de l'aventurier")
 		case "7":
-			return
+			return false
 		default:
 			fmt.Println("Choix invalide.")
 		}

@@ -83,6 +83,8 @@ func startInputReader() {
 					}
 				case b == 3: // Ctrl+C
 					arrowChan <- "quit"
+				case (b == 'm' || b == 'M') && atomic.LoadInt32(&lineModeFlag) == 0:
+					arrowChan <- "menu" // raccourci alternatif à Entrée pour ouvrir le menu depuis la carte
 				default:
 					if atomic.LoadInt32(&lineModeFlag) == 1 {
 						r := rune(b)

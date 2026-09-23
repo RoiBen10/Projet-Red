@@ -105,11 +105,12 @@ func (c *Character) takePot() {
 	fmt.Printf("Potion de vie utilisée. PV : %d/%d\n", c.CurrentHP, c.MaxHP)
 }
 
-// Tâche 9 : poisonPot --> inflige 10 dégâts/seconde pendant 3s.
-func (c *Character) poisonPot() {
+// Tâche 9 : poisonPot --> inflige 10 dégâts/seconde pendant 3s. Renvoie true si le poison a tué le
+// Voyageur (nouvelle boucle déclenchée), pour que l'appelant referme le menu et revienne à la carte.
+func (c *Character) poisonPot() bool {
 	if !c.removeInventory("Potion de poison") {
 		fmt.Println("Aucune potion de poison dans l'inventaire.")
-		return
+		return false
 	}
 	fmt.Println("Vous buvez la potion de poison...")
 	for i := 0; i < 3; i++ {
@@ -119,8 +120,9 @@ func (c *Character) poisonPot() {
 			c.CurrentHP = 0
 		}
 		fmt.Printf("PV : %d/%d\n", c.CurrentHP, c.MaxHP)
-		if c.isDead() {
-			return
+		if c.checkDeath() {
+			return true
 		}
 	}
+	return false
 }

@@ -47,17 +47,19 @@ func tileAt(x, y int) byte {
 
 // attemptMove --> tente de déplacer le joueur vers (nx, ny) : marcher sur un mannequin ('D')
 // déclenche un combat d'entraînement au lieu de bloquer ; sinon, avance si la tuile est praticable.
-func attemptMove(c *Character, px, py, nx, ny int) (int, int) {
+// Modifie directement la position du personnage. Renvoie true si le combat a été perdu (nouvelle
+// boucle temporelle déclenchée), pour que l'appelant redémarre l'horloge du jour.
+func attemptMove(c *Character, nx, ny int) bool {
 	if tileAt(nx, ny) == 'D' {
 		mummy := initMummy()
 		disableLineMode()
-		trainingFight(c, &mummy)
-		return px, py
+		won := trainingFight(c, &mummy)
+		return !won
 	}
 	if isWalkable(nx, ny) {
-		return nx, ny
+		c.PosX, c.PosY = nx, ny
 	}
-	return px, py
+	return false
 }
 
 // viewSize --> dimensions de la caméra (en tuiles), calées sur la taille du terminal pour rester
@@ -91,25 +93,20 @@ func viewSize() (int, int) {
 // mapScreen --> affiche une caméra centrée sur le joueur (pas la carte entière), en blocs de
 // couleur pleins ; déplacement aux flèches (bloqué par les obstacles), Entrée pour ouvrir le menu.
 func mapScreen(c *Character) {
-	px, py := spawnPoint()
+	c.PosX, c.PosY = spawnPoint()
 	mapH := len(worldMap)
 	mapW := len(worldMap[0])
 
-	fmt.Print("\033[H\033[2J")
-	fmt.Print(c.Name + ", tu te réveilles au terrain d'entraînement, juste avant Emberhollow.\r\n")
-	fmt.Print("Utilise les flèches ↑↓←→ pour te déplacer. Rejoins la porte au nord pour entrer dans le village.\r\n\r\n")
-	fmt.Print("Appuie sur une touche pour commencer...\r\n")
-	if _, ok := <-arrowChan; !ok {
+	if !storyIntro(c) {
 		return
 	}
-	fmt.Print("\033[H\033[2J")
 
 	draw := func() {
 		cols, rows := terminalSize()
 		viewW, viewH := viewSize()
 
-		camX := px - viewW/2
-		camY := py - viewH/2
+		camX := c.PosX - viewW/2
+		camY := c.PosY - viewH/2
 		if camX < 0 {
 			camX = 0
 		}
@@ -138,7 +135,7 @@ func mapScreen(c *Character) {
 				if my >= 0 && my < mapH && mx >= 0 && mx < mapW {
 					color = tileColors[worldMap[my][mx]]
 				}
-				if mx == px && my == py {
+				if mx == c.PosX && my == c.PosY {
 					color = playerColor
 				}
 				for gi := 0; gi < tileGlyphWidth; gi++ {
@@ -164,8 +161,8 @@ func mapScreen(c *Character) {
 			b.WriteString("\r\n")
 		}
 		b.WriteString(renderScreenBG(screen, left))
-		footer := c.Name + "  --  flèches pour se déplacer, Entrée pour le menu"
-		if py > trainingFenceY {
+		footer := c.Name + "  --  flèches pour se déplacer, Entrée ou M pour le menu"
+		if c.PosY > trainingFenceY {
 			footer = "Terrain d'entraînement -- avance vers le nord (↑) jusqu'à la porte du village"
 		}
 		b.WriteString("\r\n" + left + footer + "\r\n")
@@ -173,40 +170,57 @@ func mapScreen(c *Character) {
 	}
 	draw()
 
-	midnight := make(chan struct{})
-	go runClock(midnight)
-
+	// Une itération de cette boucle = un jour de la boucle temporelle. Une mort (combat perdu,
+	// poison, ou minuit) démarre un nouveau jour : le Voyageur revient toujours à la carte, jamais
+	// au menu ni à l'écran titre (Tâche 8 / boucle temporelle).
 	for {
-		select {
-		case key, ok := <-arrowChan:
-			if !ok {
-				return
-			}
-			switch key {
-			case "up":
-				px, py = attemptMove(c, px, py, px, py-1)
-			case "down":
-				px, py = attemptMove(c, px, py, px, py+1)
-			case "left":
-				px, py = attemptMove(c, px, py, px-1, py)
-			case "right":
-				px, py = attemptMove(c, px, py, px+1, py)
-			case "enter":
-				enableLineMode()
-				quit := runMenu(c, midnight)
-				disableLineMode()
-				if quit {
+		midnight := make(chan struct{})
+		go runClock(midnight)
+
+		move := func(nx, ny int) bool {
+			return attemptMove(c, nx, ny)
+		}
+
+		dayEnded := false
+		for !dayEnded {
+			select {
+			case key, ok := <-arrowChan:
+				if !ok {
 					return
 				}
+				switch key {
+				case "up":
+					dayEnded = move(c.PosX, c.PosY-1)
+				case "down":
+					dayEnded = move(c.PosX, c.PosY+1)
+				case "left":
+					dayEnded = move(c.PosX-1, c.PosY)
+				case "right":
+					dayEnded = move(c.PosX+1, c.PosY)
+				case "enter", "menu":
+					enableLineMode()
+					quit, newDay := runMenu(c, midnight)
+					disableLineMode()
+					if quit {
+						return
+					}
+					fmt.Print("\033[H\033[2J")
+					dayEnded = newDay
+				case "quit":
+					return
+				}
+				if !dayEnded {
+					draw()
+				}
+			case <-midnight:
 				fmt.Print("\033[H\033[2J")
-			case "quit":
-				return
+				fmt.Println("Le feu s'abat sur Emberhollow. " + c.Name + " meurt...")
+				c.startNewDay()
+				fmt.Println("Un nouveau jour commence. " + c.Name + " se réveille au terrain d'entraînement.")
+				dayEnded = true
 			}
-			draw()
-		case <-midnight:
-			fmt.Print("\033[H\033[2J")
-			fmt.Println("Le feu s'abat sur Emberhollow. " + c.Name + " meurt...")
-			return
 		}
+		fmt.Print("\033[H\033[2J")
+		draw()
 	}
 }

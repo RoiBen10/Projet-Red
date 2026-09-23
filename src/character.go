@@ -19,6 +19,8 @@ type Character struct {
 	Defense           int
 	Exp               int
 	ExpMax            int
+	PosX              int
+	PosY              int
 }
 
 // Tâche 2 : initCharacter --> construit un perso, avec "Coup de poing" comme sort de base et 100 pièces d'or.
@@ -49,13 +51,23 @@ func (c Character) displayInfo() {
 	fmt.Printf("Inventaire : %d objet(s)\n", len(c.Inventory))
 }
 
-// Tâche 8 : isDead --> à 0 PV, le perso meurt puis revient à 50% de ses PV max.
-func (c *Character) isDead() bool {
+// startNewDay --> la boucle temporelle recommence (minuit, ou le Voyageur s'effondre) : PV pleins,
+// inventaire et or perdus, retour au terrain d'entraînement. Il garde ce qu'il a appris (niveau, sorts).
+func (c *Character) startNewDay() {
+	c.CurrentHP = c.MaxHP
+	c.Inventory = nil
+	c.Gold = 0
+	c.PosX, c.PosY = spawnPoint()
+}
+
+// Tâche 8 : checkDeath --> à 0 PV (combat perdu, poison...), déclenche une nouvelle boucle et le
+// signale à l'appelant, pour qu'il referme tout écran ouvert et revienne directement à la carte.
+func (c *Character) checkDeath() bool {
 	if c.CurrentHP > 0 {
 		return false
 	}
-	fmt.Println(c.Name + " s'effondre... et se réveille dans sa chambre, comme chaque matin.")
-	c.CurrentHP = c.MaxHP / 2
-	fmt.Printf("PV : %d/%d\n", c.CurrentHP, c.MaxHP)
+	fmt.Println(c.Name + " s'effondre... Le feu s'abat sur Emberhollow, et tout recommence au matin.")
+	c.startNewDay()
+	fmt.Printf("PV restaurés : %d/%d. Inventaire et or perdus, mais tu gardes ce que tu as appris.\n", c.CurrentHP, c.MaxHP)
 	return true
 }

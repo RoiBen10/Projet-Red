@@ -103,7 +103,7 @@ func trainingFight(c *Character, m *Monster) bool {
 
 		if c.CurrentHP <= 0 {
 			combatDefeat(c, *m)
-			c.isDead() // Tâche 8 : le Voyageur s'effondre et revient à 50% de ses PV max
+			c.checkDeath() // Tâche 8 : le Voyageur s'effondre, nouvelle boucle
 			return false
 		}
 
