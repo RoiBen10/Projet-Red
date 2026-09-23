@@ -63,6 +63,61 @@ func portraitRow(y int) string {
 	return b.String()
 }
 
+// villageColor --> teinte unique (clair de lune) pour tout le fond ASCII du village : "sans
+// couleur" comme demandé, la densité des caractères fait le contraste, pas une palette.
+var villageColor = [3]int{150, 160, 175}
+
+// buildMonoScreen --> grille targetW x targetH à partir de caractères ASCII seuls, tous rendus
+// dans une teinte unique color (contrairement à buildScreen, qui utilise une couleur par pixel).
+func buildMonoScreen(chars []string, color [3]int, targetW, targetH int) [][]screenCell {
+	screen := make([][]screenCell, targetH)
+	for y := 0; y < targetH; y++ {
+		screen[y] = make([]screenCell, targetW)
+		for x := 0; x < targetW; x++ {
+			cell := screenCell{ch: ' ', color: color}
+			if y < len(chars) && x < len(chars[y]) {
+				cell.ch = rune(chars[y][x])
+			}
+			screen[y][x] = cell
+		}
+	}
+	return screen
+}
+
+// villageFrameIndex --> avance/recule dans villageFrames façon va-et-vient (comme l'écran titre),
+// pour une boucle fluide sans saut brusque entre la dernière et la première image.
+func villageFrameIndex(step int) int {
+	n := len(villageFrames)
+	if n == 0 {
+		return 0
+	}
+	cycle := 2 * (n - 1)
+	if cycle <= 0 {
+		return 0
+	}
+	pos := step % cycle
+	if pos < 0 {
+		pos += cycle
+	}
+	if pos < n {
+		return pos
+	}
+	return cycle - pos
+}
+
+// drawIntroFrame --> le fond animé (Emberhollow, de nuit) et la boîte de dialogue par-dessus, dans
+// le même rendu : un seul repositionnement de curseur, pas d'effacement, donc pas de scintillement.
+func drawIntroFrame(step int, lines []string, showPrompt bool, showPortrait bool) {
+	if len(villageFrames) > 0 {
+		cols, rows := terminalSize()
+		chars := resampleGrid(villageFrames[villageFrameIndex(step)], cols, rows)
+		screen := buildMonoScreen(chars, villageColor, cols, rows)
+		dimRegion(screen, 0, 0, cols, rows, 0.5) // fond discret, pour ne pas gêner la lecture
+		fmt.Print("\033[H" + renderScreen(screen))
+	}
+	drawDialogueBox(lines, showPrompt, showPortrait)
+}
+
 // dialogueTextWidth / dialogueBoxHeight --> dimensions du texte et hauteur totale de la boîte
 // (au moins aussi haute que le portrait, pour que les deux cadres s'alignent).
 func dialogueTextWidth() int {
@@ -77,8 +132,10 @@ func dialogueTextWidth() int {
 	return w
 }
 
-func dialogueBoxHeight() int {
-	if len(portraitPixels) > combatBoxLines {
+// dialogueBoxHeight --> hauteur intérieure de la boîte : la hauteur du portrait quand il est
+// affiché, sinon une petite boîte de narration classique (pas d'espace vide inutile).
+func dialogueBoxHeight(showPortrait bool) int {
+	if showPortrait && len(portraitPixels) > combatBoxLines {
 		return len(portraitPixels)
 	}
 	return combatBoxLines
@@ -90,7 +147,7 @@ func dialogueBoxHeight() int {
 func drawDialogueBox(lines []string, showPrompt bool, showPortrait bool) {
 	cols, rows := terminalSize()
 	textWidth := dialogueTextWidth()
-	boxHeight := dialogueBoxHeight()
+	boxHeight := dialogueBoxHeight(showPortrait)
 
 	portraitBlockWidth := 0
 	if showPortrait {
@@ -109,7 +166,7 @@ func drawDialogueBox(lines []string, showPrompt bool, showPortrait bool) {
 	}
 
 	var b strings.Builder
-	b.WriteString("\033[H\033[37m")
+	b.WriteString("\033[H\033[49m\033[37m") // \033[49m : annule le fond hérité du décor animé
 	for i := 0; i < topPad; i++ {
 		b.WriteString("\r\n")
 	}
@@ -120,7 +177,7 @@ func drawDialogueBox(lines []string, showPrompt bool, showPortrait bool) {
 		var row strings.Builder
 		row.WriteString(left + "│ ")
 		if showPortrait {
-			row.WriteString(portraitRow(i) + " │ ")
+			row.WriteString(portraitRow(i) + "\033[49m\033[37m │ ")
 		}
 		text := ""
 		if i < len(lines) {
@@ -143,26 +200,26 @@ func drawDialogueBox(lines []string, showPrompt bool, showPortrait bool) {
 // Une touche affiche le texte en entier d'un coup, une touche suivante fait avancer. speaker=true
 // affiche le portrait du Voyageur à gauche (quand c'est notre personnage qui parle), false pour une
 // simple narration (pas de portrait). Renvoie false si le flux d'entrée s'est fermé.
-func showDialogue(text string, speaker bool) bool {
+func showDialogue(text string, speaker bool, startFrame int) bool {
 	fullLines := wrapNarration(text, dialogueTextWidth())
 	joined := strings.Join(fullLines, "\n")
 	runes := []rune(joined)
 
 	for i := range runes {
 		partial := strings.Split(string(runes[:i+1]), "\n")
-		drawDialogueBox(partial, false, speaker)
+		drawIntroFrame(startFrame+i/5, partial, false, speaker)
 		select {
 		case _, ok := <-arrowChan:
 			if !ok {
 				return false
 			}
-			drawDialogueBox(fullLines, true, speaker)
+			drawIntroFrame(startFrame+i/5, fullLines, true, speaker)
 			_, ok = <-arrowChan
 			return ok
 		case <-time.After(20 * time.Millisecond):
 		}
 	}
-	drawDialogueBox(fullLines, true, speaker)
+	drawIntroFrame(startFrame+len(runes)/5, fullLines, true, speaker)
 	_, ok := <-arrowChan
 	return ok
 }
@@ -170,8 +227,6 @@ func showDialogue(text string, speaker bool) bool {
 // storyIntro --> l'intrigue du jeu, présentée façon Undertale (boîtes de dialogue successives),
 // juste avant l'arrivée sur la carte. Renvoie false si le flux d'entrée s'est fermé (jeu à quitter).
 func storyIntro(c *Character) bool {
-	fmt.Print("\033[H\033[2J")
-
 	type beat struct {
 		text    string
 		speaker bool
@@ -186,8 +241,8 @@ func storyIntro(c *Character) bool {
 		{"Utilise les flèches ↑↓←→ pour te déplacer. Entrée ou M ouvrent le menu à tout moment.", false},
 	}
 
-	for _, beat := range beats {
-		if !showDialogue(beat.text, beat.speaker) {
+	for i, beat := range beats {
+		if !showDialogue(beat.text, beat.speaker, i*25) {
 			return false
 		}
 	}

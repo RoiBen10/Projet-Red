@@ -76,22 +76,6 @@ func (c *Character) removeInventory(item string) bool {
 	return false
 }
 
-// Tâche 21 : useItem --> utilise un item de l'inventaire par son nom (potions, livre, équipement).
-func (c *Character) useItem(item string) {
-	switch item {
-	case "Potion de vie":
-		c.takePot()
-	case "Potion de poison":
-		c.poisonPot()
-	case "Livre de Sort : Boule de Feu":
-		c.useSpellBook()
-	case "Chapeau de l'aventurier", "Tunique de l'aventurier", "Bottes de l'aventurier":
-		c.equipItem(item)
-	default:
-		fmt.Println("Vous ne pouvez pas utiliser " + item + " ici.")
-	}
-}
-
 // Tâche 5 : takePot --> consomme 1 potion de vie, rend 50 PV.
 func (c *Character) takePot() {
 	if !c.removeInventory("Potion de vie") {

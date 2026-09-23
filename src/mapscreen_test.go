@@ -50,6 +50,28 @@ func TestAttemptMoveOntoGrass(t *testing.T) {
 	}
 }
 
+// tileAt / isWalkable --> un mannequin ('D') vaincu redevient de l'herbe (praticable, plus de
+// point rouge à l'écran) au lieu de redéclencher un combat.
+func TestDefeatedDummyDisappears(t *testing.T) {
+	x, y := 40, 60 // position d'un mannequin, worldmap.go
+	if tileAt(x, y) != 'D' {
+		t.Fatalf("expected a training dummy at (%d,%d), got %q", x, y, tileAt(x, y))
+	}
+	if isWalkable(x, y) {
+		t.Fatalf("an active dummy should block movement")
+	}
+
+	defeatedDummies[[2]int{x, y}] = true
+	defer delete(defeatedDummies, [2]int{x, y})
+
+	if tileAt(x, y) != '.' {
+		t.Fatalf("defeated dummy tile = %q, want grass '.'", tileAt(x, y))
+	}
+	if !isWalkable(x, y) {
+		t.Fatalf("a defeated dummy's tile should be walkable")
+	}
+}
+
 // viewSize --> la caméra reste dans les bornes prévues (largeur/hauteur impaires, tailles raisonnables).
 func TestViewSizeStaysInBounds(t *testing.T) {
 	w, h := viewSize()

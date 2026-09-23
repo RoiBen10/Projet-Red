@@ -37,12 +37,21 @@ func spawnPoint() (int, int) {
 // trainingFenceY --> ligne de la porte nord du terrain d'entraînement (au-delà : le village).
 const trainingFenceY = 54
 
-// tileAt --> tuile de worldMap à (x, y), ' ' si hors carte.
+// defeatedDummies --> mannequins d'entraînement ('D') déjà vaincus : leur tuile redevient de
+// l'herbe (praticable, plus de point rouge) au lieu de redéclencher un combat.
+var defeatedDummies = map[[2]int]bool{}
+
+// tileAt --> tuile de worldMap à (x, y), ' ' si hors carte. Un mannequin vaincu est rendu comme de
+// l'herbe : il disparaît de la carte une fois le combat gagné.
 func tileAt(x, y int) byte {
 	if y < 0 || y >= len(worldMap) || x < 0 || x >= len(worldMap[y]) {
 		return ' '
 	}
-	return worldMap[y][x]
+	tile := worldMap[y][x]
+	if tile == 'D' && defeatedDummies[[2]int{x, y}] {
+		return '.'
+	}
+	return tile
 }
 
 // attemptMove --> tente de déplacer le joueur vers (nx, ny) : marcher sur un mannequin ('D')
@@ -54,6 +63,12 @@ func attemptMove(c *Character, nx, ny int) bool {
 		mummy := initMummy()
 		disableLineMode()
 		won := trainingFight(c, &mummy)
+		if won {
+			defeatedDummies[[2]int{nx, ny}] = true
+		}
+		// la caméra de la carte ne redessine qu'une petite zone centrée : sans ce nettoyage,
+		// le sprite du combat resterait visible en marge après le retour à la carte.
+		fmt.Print("\033[H\033[2J")
 		return !won
 	}
 	if isWalkable(nx, ny) {
@@ -133,7 +148,7 @@ func mapScreen(c *Character) {
 				mx, my := camX+tx, camY+ty
 				color := [3]int{0, 0, 0}
 				if my >= 0 && my < mapH && mx >= 0 && mx < mapW {
-					color = tileColors[worldMap[my][mx]]
+					color = tileColors[tileAt(mx, my)]
 				}
 				if mx == c.PosX && my == c.PosY {
 					color = playerColor

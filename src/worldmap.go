@@ -1,6 +1,6 @@
 package main
 
-// Carte d'Emberhollow (Task.md, Personne A) --> dessinée à la main. Un terrain d'entraînement
+// Carte d'Emberhollow --> dessinée à la main. Un terrain d'entraînement
 // clôturé (tuto) précède le village, avec une entrée (route + porte dans le mur d'enceinte, au
 // nord du terrain) menant à Emberhollow. 1 caractère = 1 tuile.
 // Légende :
@@ -89,10 +89,7 @@ var worldMap = []string{
 
 // isWalkable --> vrai si la tuile à (x, y) est praticable (herbe ou chemin).
 func isWalkable(x, y int) bool {
-	if y < 0 || y >= len(worldMap) || x < 0 || x >= len(worldMap[y]) {
-		return false
-	}
-	switch worldMap[y][x] {
+	switch tileAt(x, y) {
 	case '.', ',':
 		return true
 	default:
